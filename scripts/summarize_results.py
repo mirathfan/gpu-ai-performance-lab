@@ -59,6 +59,30 @@ ONNXRUNTIME_REQUIRED_COLUMNS = {
     "gpu_name",
 }
 
+TENSORRT_EP_REQUIRED_COLUMNS = {
+    "batch_size",
+    "backend",
+    "precision",
+    "device",
+    "warmup_iters",
+    "measurement_iters",
+    "mean_latency_ms",
+    "p50_latency_ms",
+    "p90_latency_ms",
+    "p95_latency_ms",
+    "p99_latency_ms",
+    "min_latency_ms",
+    "max_latency_ms",
+    "throughput_samples_per_sec",
+    "provider",
+    "model",
+    "onnxruntime_version",
+    "timestamp",
+    "platform",
+    "python_version",
+    "gpu_name",
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -129,6 +153,18 @@ def is_resnet18_onnxruntime_csv(path: Path, rows: list[dict[str, str]]) -> bool:
     )
 
 
+def is_resnet18_tensorrt_ep_csv(path: Path, rows: list[dict[str, str]]) -> bool:
+    filename = path.name.lower()
+    backend = rows[0].get("backend", "").lower()
+    model = rows[0].get("model", "").lower()
+    return (
+        "resnet18" in filename
+        and "tensorrt_ep" in filename
+        and backend == "tensorrt_ep"
+        and model == "resnet18"
+    )
+
+
 def csv_score(path: Path, expected_filename: str) -> tuple[int, float]:
     score = 100 if path.name.lower() == expected_filename else 0
     return score, path.stat().st_mtime
@@ -138,13 +174,15 @@ def detect_benchmark_csvs(results_dir: Path) -> dict[str, tuple[Path, list[dict[
     """Find the project CSVs used by the combined ResNet18 report.
 
     PyTorch FP32 and FP16 are required because they are the Milestone 1 baseline.
-    ONNX Runtime FP32 is optional so the report and plots still work before the
-    user has run the Milestone 2 benchmark.
+    ONNX Runtime FP32 and TensorRT EP results are optional so the report and
+    plots still work before the user has run those benchmark scripts.
     """
     candidates: dict[str, list[tuple[tuple[int, float], Path, list[dict[str, str]]]]] = {
         "pytorch_fp32": [],
         "pytorch_fp16": [],
         "onnxruntime_fp32": [],
+        "tensorrt_ep_fp32": [],
+        "tensorrt_ep_fp16": [],
     }
 
     for csv_path in sorted(results_dir.glob("*.csv")):
@@ -170,6 +208,19 @@ def detect_benchmark_csvs(results_dir: Path) -> dict[str, tuple[Path, list[dict[
                 validate_required_columns(csv_path, rows, ONNXRUNTIME_REQUIRED_COLUMNS)
                 candidates["onnxruntime_fp32"].append(
                     (csv_score(csv_path, "resnet18_onnxruntime.csv"), csv_path, rows)
+                )
+            continue
+
+        if is_resnet18_tensorrt_ep_csv(csv_path, rows):
+            precision = rows[0].get("precision", "").lower()
+            if precision in {"fp32", "fp16"}:
+                validate_required_columns(csv_path, rows, TENSORRT_EP_REQUIRED_COLUMNS)
+                candidates[f"tensorrt_ep_{precision}"].append(
+                    (
+                        csv_score(csv_path, f"resnet18_tensorrt_ep_{precision}.csv"),
+                        csv_path,
+                        rows,
+                    )
                 )
 
     detected: dict[str, tuple[Path, list[dict[str, str]]]] = {}
@@ -259,6 +310,8 @@ def backend_label(key: str) -> str:
         "pytorch_fp32": "PyTorch FP32",
         "pytorch_fp16": "PyTorch FP16",
         "onnxruntime_fp32": "ONNX Runtime FP32",
+        "tensorrt_ep_fp32": "TensorRT EP FP32",
+        "tensorrt_ep_fp16": "TensorRT EP FP16",
     }
     return labels[key]
 
@@ -318,7 +371,13 @@ def system_metadata_table(
         ["CUDA version", first_value(all_rows, "cuda_version")],
     ]
 
-    for key in ("pytorch_fp32", "pytorch_fp16", "onnxruntime_fp32"):
+    for key in (
+        "pytorch_fp32",
+        "pytorch_fp16",
+        "onnxruntime_fp32",
+        "tensorrt_ep_fp32",
+        "tensorrt_ep_fp16",
+    ):
         if key in detected:
             path, rows = detected[key]
             table_rows.append([f"{backend_label(key)} source CSV", relative_repo_path(path)])
@@ -357,9 +416,12 @@ def comparison_table(
 ) -> str:
     series = {key: rows_by_batch(rows) for key, (_, rows) in detected.items()}
     required_keys = ["pytorch_fp32", "pytorch_fp16"]
-    compare_keys = required_keys + (
-        ["onnxruntime_fp32"] if "onnxruntime_fp32" in detected else []
-    )
+    optional_keys = [
+        key
+        for key in ("onnxruntime_fp32", "tensorrt_ep_fp32", "tensorrt_ep_fp16")
+        if key in detected
+    ]
+    compare_keys = required_keys + optional_keys
     batch_sets = [set(series[key]) for key in compare_keys]
     batch_sizes = sorted(set.intersection(*batch_sets))
     if not batch_sizes:
@@ -383,6 +445,17 @@ def comparison_table(
                 "ONNX throughput delta",
             ]
         )
+    for key in ("tensorrt_ep_fp32", "tensorrt_ep_fp16"):
+        if key in detected:
+            label = backend_label(key)
+            headers.extend(
+                [
+                    f"{label} P50 ms",
+                    f"{label} latency delta",
+                    f"{label} samples/s",
+                    f"{label} throughput delta",
+                ]
+            )
 
     table_rows: list[list[Any]] = []
     for batch_size in batch_sizes:
@@ -419,6 +492,25 @@ def comparison_table(
                     fmt_num(onnx_throughput),
                     fmt_pct(
                         (onnx_throughput - torch_fp32_throughput)
+                        / torch_fp32_throughput
+                        * 100.0
+                    ),
+                ]
+            )
+
+        for key in ("tensorrt_ep_fp32", "tensorrt_ep_fp16"):
+            if key not in detected:
+                continue
+            trt_row = series[key][batch_size]
+            trt_p50 = as_float(trt_row, "p50_latency_ms")
+            trt_throughput = as_float(trt_row, "throughput_samples_per_sec")
+            row.extend(
+                [
+                    fmt_num(trt_p50),
+                    fmt_pct((trt_p50 - torch_fp32_p50) / torch_fp32_p50 * 100.0),
+                    fmt_num(trt_throughput),
+                    fmt_pct(
+                        (trt_throughput - torch_fp32_throughput)
                         / torch_fp32_throughput
                         * 100.0
                     ),
@@ -475,6 +567,9 @@ def build_report(
     _, fp32_rows = detected["pytorch_fp32"]
     _, fp16_rows = detected["pytorch_fp16"]
     onnx_available = "onnxruntime_fp32" in detected
+    trt_keys = [
+        key for key in ("tensorrt_ep_fp32", "tensorrt_ep_fp16") if key in detected
+    ]
 
     sections = [
         "# ResNet18 Inference Benchmark Report",
@@ -483,8 +578,9 @@ def build_report(
         "CSV files from `results/`. Benchmark numbers should come from actual "
         "runs only and should not be manually invented.",
         "",
-        "TensorRT is not added yet; this milestone compares PyTorch and ONNX "
-        "Runtime only.",
+        "TensorRT results in this report use ONNX Runtime "
+        "`TensorrtExecutionProvider`; raw TensorRT engine API benchmarks are "
+        "not added yet.",
         "",
         "## System and Hardware Metadata",
         "",
@@ -525,11 +621,44 @@ def build_report(
             ]
         )
 
+    if trt_keys:
+        for key in trt_keys:
+            _, trt_rows = detected[key]
+            sections.extend(
+                [
+                    f"## {backend_label(key)} Results",
+                    "",
+                    result_table(trt_rows, include_provider=True),
+                    "",
+                ]
+            )
+    else:
+        sections.extend(
+            [
+                "## TensorRT EP Results",
+                "",
+                "`results/resnet18_tensorrt_ep*.csv` was not found. Run the "
+                "Milestone 3 TensorRT EP benchmark to add this section.",
+                "",
+            ]
+        )
+
     sections.extend(
         [
             "## Backend Comparison",
             "",
             comparison_table(detected),
+            "",
+            "## TensorRT EP Notes",
+            "",
+            "TensorRT EP uses TensorRT through ONNX Runtime provider selection. "
+            "The first run for a model shape and precision may build and cache "
+            "a TensorRT engine, so initial runs can include build overhead. "
+            "These results can differ from raw TensorRT API benchmarks because "
+            "ONNX Runtime still owns session setup, graph partitioning, and "
+            "provider fallback behavior. TensorRT is expected to help most when "
+            "graph optimizations, precision lowering, and kernel selection "
+            "improve execution for the target GPU.",
             "",
             "## Latency vs Throughput",
             "",
@@ -573,6 +702,11 @@ def main() -> int:
         print(
             "Note: results/resnet18_onnxruntime.csv was not found, so ONNX "
             "Runtime results were not included yet."
+        )
+    if not any(key.startswith("tensorrt_ep_") for key in detected):
+        print(
+            "Note: results/resnet18_tensorrt_ep*.csv was not found, so "
+            "TensorRT EP results were not included yet."
         )
     return 0
 

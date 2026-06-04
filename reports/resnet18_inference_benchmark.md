@@ -2,7 +2,7 @@
 
 This report summarizes locally generated ResNet18 inference benchmark CSV files from `results/`. Benchmark numbers should come from actual runs only and should not be manually invented.
 
-TensorRT is not added yet; this milestone compares PyTorch and ONNX Runtime only.
+TensorRT results in this report use ONNX Runtime `TensorrtExecutionProvider`; raw TensorRT engine API benchmarks are not added yet.
 
 ## System and Hardware Metadata
 
@@ -22,6 +22,10 @@ TensorRT is not added yet; this milestone compares PyTorch and ONNX Runtime only
 | PyTorch FP16 timestamp | 2026-06-04T06:37:11.312906+00:00 |
 | ONNX Runtime FP32 source CSV | results/resnet18_onnxruntime.csv |
 | ONNX Runtime FP32 timestamp | 2026-06-04T07:30:18.945875+00:00 |
+| TensorRT EP FP32 source CSV | results/resnet18_tensorrt_ep_fp32.csv |
+| TensorRT EP FP32 timestamp | 2026-06-04T08:01:00.280831+00:00 |
+| TensorRT EP FP16 source CSV | results/resnet18_tensorrt_ep_fp16.csv |
+| TensorRT EP FP16 timestamp | 2026-06-04T08:02:10.896571+00:00 |
 
 ## Benchmark Configuration
 
@@ -29,7 +33,7 @@ TensorRT is not added yet; this milestone compares PyTorch and ONNX Runtime only
 | --- | --- |
 | Model | resnet18 |
 | Weights | ResNet18_Weights.IMAGENET1K_V1 |
-| Backends | PyTorch FP32, PyTorch FP16, ONNX Runtime FP32 |
+| Backends | PyTorch FP32, PyTorch FP16, ONNX Runtime FP32, TensorRT EP FP32, TensorRT EP FP16 |
 | Input shape | [batch_size, 3, 224, 224] |
 | Batch sizes | 1, 4, 8, 16 |
 | Precision modes | fp16, fp32 |
@@ -64,14 +68,36 @@ TensorRT is not added yet; this milestone compares PyTorch and ONNX Runtime only
 | 8 | 7.047 | 6.957 | 7.332 | 7.693 | 8.229 | 6.794 | 8.429 | 1135.189 | CUDAExecutionProvider |
 | 16 | 12.567 | 12.507 | 12.830 | 12.994 | 13.142 | 12.268 | 13.253 | 1273.175 | CUDAExecutionProvider |
 
+## TensorRT EP FP32 Results
+
+| Batch | Mean ms | P50 ms | P90 ms | P95 ms | P99 ms | Min ms | Max ms | Throughput samples/s | Provider |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 3.861 | 4.815 | 5.468 | 5.653 | 6.100 | 1.380 | 6.611 | 258.976 | TensorrtExecutionProvider |
+| 4 | 4.143 | 4.028 | 4.740 | 5.085 | 5.464 | 3.725 | 6.061 | 965.403 | TensorrtExecutionProvider |
+| 8 | 5.674 | 5.602 | 5.980 | 6.088 | 6.165 | 5.373 | 6.198 | 1409.922 | TensorrtExecutionProvider |
+| 16 | 9.173 | 9.142 | 9.432 | 9.533 | 9.657 | 8.788 | 9.814 | 1744.329 | TensorrtExecutionProvider |
+
+## TensorRT EP FP16 Results
+
+| Batch | Mean ms | P50 ms | P90 ms | P95 ms | P99 ms | Min ms | Max ms | Throughput samples/s | Provider |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.877 | 0.860 | 0.949 | 0.975 | 1.053 | 0.808 | 1.468 | 1140.229 | TensorrtExecutionProvider |
+| 4 | 1.667 | 1.504 | 2.172 | 2.215 | 2.320 | 1.435 | 2.327 | 2399.911 | TensorrtExecutionProvider |
+| 8 | 2.617 | 2.588 | 2.750 | 2.794 | 2.978 | 2.486 | 3.409 | 3056.456 | TensorrtExecutionProvider |
+| 16 | 4.797 | 4.768 | 4.899 | 4.958 | 5.109 | 4.670 | 5.233 | 3335.212 | TensorrtExecutionProvider |
+
 ## Backend Comparison
 
-| Batch | PyTorch FP32 P50 ms | PyTorch FP16 P50 ms | FP16 latency delta | PyTorch FP32 samples/s | PyTorch FP16 samples/s | FP16 throughput delta | ONNX Runtime FP32 P50 ms | ONNX latency delta | ONNX Runtime samples/s | ONNX throughput delta |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 3.397 | 4.531 | +33.4% | 251.820 | 219.688 | -12.8% | 2.316 | -31.8% | 320.986 | +27.5% |
-| 4 | 3.628 | 4.373 | +20.5% | 1076.372 | 908.431 | -15.6% | 4.223 | +16.4% | 926.603 | -13.9% |
-| 8 | 5.969 | 4.094 | -31.4% | 1248.586 | 1910.554 | +53.0% | 6.957 | +16.6% | 1135.189 | -9.1% |
-| 16 | 11.067 | 7.355 | -33.5% | 1440.036 | 2140.321 | +48.6% | 12.507 | +13.0% | 1273.175 | -11.6% |
+| Batch | PyTorch FP32 P50 ms | PyTorch FP16 P50 ms | FP16 latency delta | PyTorch FP32 samples/s | PyTorch FP16 samples/s | FP16 throughput delta | ONNX Runtime FP32 P50 ms | ONNX latency delta | ONNX Runtime samples/s | ONNX throughput delta | TensorRT EP FP32 P50 ms | TensorRT EP FP32 latency delta | TensorRT EP FP32 samples/s | TensorRT EP FP32 throughput delta | TensorRT EP FP16 P50 ms | TensorRT EP FP16 latency delta | TensorRT EP FP16 samples/s | TensorRT EP FP16 throughput delta |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 3.397 | 4.531 | +33.4% | 251.820 | 219.688 | -12.8% | 2.316 | -31.8% | 320.986 | +27.5% | 4.815 | +41.7% | 258.976 | +2.8% | 0.860 | -74.7% | 1140.229 | +352.8% |
+| 4 | 3.628 | 4.373 | +20.5% | 1076.372 | 908.431 | -15.6% | 4.223 | +16.4% | 926.603 | -13.9% | 4.028 | +11.0% | 965.403 | -10.3% | 1.504 | -58.6% | 2399.911 | +123.0% |
+| 8 | 5.969 | 4.094 | -31.4% | 1248.586 | 1910.554 | +53.0% | 6.957 | +16.6% | 1135.189 | -9.1% | 5.602 | -6.1% | 1409.922 | +12.9% | 2.588 | -56.6% | 3056.456 | +144.8% |
+| 16 | 11.067 | 7.355 | -33.5% | 1440.036 | 2140.321 | +48.6% | 12.507 | +13.0% | 1273.175 | -11.6% | 9.142 | -17.4% | 1744.329 | +21.1% | 4.768 | -56.9% | 3335.212 | +131.6% |
+
+## TensorRT EP Notes
+
+TensorRT EP uses TensorRT through ONNX Runtime provider selection. The first run for a model shape and precision may build and cache a TensorRT engine, so initial runs can include build overhead. These results can differ from raw TensorRT API benchmarks because ONNX Runtime still owns session setup, graph partitioning, and provider fallback behavior. TensorRT is expected to help most when graph optimizations, precision lowering, and kernel selection improve execution for the target GPU.
 
 ## Latency vs Throughput
 

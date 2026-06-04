@@ -13,6 +13,7 @@ ENV/
 # Local benchmark outputs
 results/*.csv
 results/*.json
+.trt_cache/
 
 # Large model and artifact files
 models/*.onnx

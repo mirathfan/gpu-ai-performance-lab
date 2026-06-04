@@ -45,7 +45,13 @@ def resolve_repo_path(path: Path) -> Path:
 def metric_series(
     detected: dict[str, tuple[Path, list[dict[str, str]]]], metric: str
 ) -> list[tuple[str, list[int], list[float]]]:
-    ordered_keys = ["pytorch_fp32", "pytorch_fp16", "onnxruntime_fp32"]
+    ordered_keys = [
+        "pytorch_fp32",
+        "pytorch_fp16",
+        "onnxruntime_fp32",
+        "tensorrt_ep_fp32",
+        "tensorrt_ep_fp16",
+    ]
     series: list[tuple[str, list[int], list[float]]] = []
 
     for key in ordered_keys:
@@ -142,6 +148,11 @@ def main() -> int:
         print(
             "Note: results/resnet18_onnxruntime.csv was not found, so ONNX "
             "Runtime was not included in latency/throughput plots yet."
+        )
+    if not any(key.startswith("tensorrt_ep_") for key in detected):
+        print(
+            "Note: results/resnet18_tensorrt_ep*.csv was not found, so "
+            "TensorRT EP was not included in plots yet."
         )
     return 0
 

@@ -130,6 +130,59 @@ python scripts/plot_results.py
 
 TensorRT is not part of Milestone 2.
 
+## Milestone 3: TensorRT Execution Provider Baseline
+
+Confirm that ONNX Runtime can see the TensorRT execution provider:
+
+```bash
+python -c "import onnxruntime as ort; print(ort.get_available_providers())"
+```
+
+The expected provider list should include `TensorrtExecutionProvider`,
+`CUDAExecutionProvider`, and `CPUExecutionProvider`.
+
+Run the TensorRT EP FP32 benchmark:
+
+```bash
+python scripts/benchmark_resnet18_tensorrt_ep.py \
+  --onnx models/resnet18.onnx \
+  --batch-sizes 1 4 8 16 \
+  --warmup 20 \
+  --iters 100 \
+  --device cuda \
+  --output results/resnet18_tensorrt_ep_fp32.csv
+```
+
+Run the TensorRT EP FP16 benchmark:
+
+```bash
+python scripts/benchmark_resnet18_tensorrt_ep.py \
+  --onnx models/resnet18.onnx \
+  --batch-sizes 1 4 8 16 \
+  --warmup 20 \
+  --iters 100 \
+  --device cuda \
+  --fp16 \
+  --output results/resnet18_tensorrt_ep_fp16.csv
+```
+
+TensorRT EP uses TensorRT through ONNX Runtime. The first run for a model shape
+and precision may build and cache a TensorRT engine under `.trt_cache/`, so the
+first run can include engine build overhead. This milestone does not use the raw
+TensorRT engine API yet.
+
+Regenerate the combined Markdown report:
+
+```bash
+python scripts/summarize_results.py
+```
+
+Regenerate plots:
+
+```bash
+python scripts/plot_results.py
+```
+
 ## Results
 
 Benchmark numbers should be generated locally and not manually invented. Keep
@@ -139,7 +192,8 @@ Git so local hardware measurements do not get committed by accident.
 Generated reports and figures under `reports/` may be committed because they
 are presentation artifacts derived from local CSV files. The raw CSV files stay
 ignored by Git. ONNX model files under `models/` are also ignored because they
-are generated artifacts.
+are generated artifacts. TensorRT cache files under `.trt_cache/` are ignored
+for the same reason.
 
 Placeholder for locally generated results:
 
@@ -148,6 +202,8 @@ Placeholder for locally generated results:
 | ResNet18 PyTorch baseline | local | fp32 | `results/resnet18_pytorch_fp32.csv` |
 | ResNet18 PyTorch baseline | local | fp16 | `results/resnet18_pytorch_fp16.csv` |
 | ResNet18 ONNX Runtime baseline | local | fp32 | `results/resnet18_onnxruntime.csv` |
+| ResNet18 TensorRT EP baseline | local | fp32 | `results/resnet18_tensorrt_ep_fp32.csv` |
+| ResNet18 TensorRT EP baseline | local | fp16 | `results/resnet18_tensorrt_ep_fp16.csv` |
 
 Generated report artifacts:
 
@@ -160,7 +216,7 @@ Generated report artifacts:
 
 ## Next Milestones
 
-- TensorRT FP32/FP16 benchmark
+- Raw TensorRT engine API benchmark
 - CUDA Monte Carlo simulation
 - CUDA deep learning kernels
 - LLM inference benchmark
