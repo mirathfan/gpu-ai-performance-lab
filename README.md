@@ -11,6 +11,41 @@ only, measures latency with warmup and CUDA synchronization, writes locally
 generated results to CSV, and generates a small Markdown report plus simple
 plots from those CSV files.
 
+## Results Summary
+
+Local benchmark environment: WSL2 Ubuntu 24.04, Python 3.12.3, PyTorch
+2.5.1+cu121, ONNX Runtime 1.26.0, NVIDIA GeForce RTX 3060 Laptop GPU with 6 GB
+VRAM.
+
+| Backend | Precision | Provider | Batch-1 P50 latency ms | Batch-16 throughput samples/s | Batch-16 throughput vs PyTorch FP32 |
+| --- | --- | --- | --- | --- | --- |
+| PyTorch | FP32 | CUDA | 3.397 | 1440.036 | baseline |
+| PyTorch | FP16 | CUDA | 4.531 | 2140.321 | +48.6% |
+| ONNX Runtime | FP32 | CUDAExecutionProvider | 2.316 | 1273.175 | -11.6% |
+| TensorRT EP | FP32 | TensorrtExecutionProvider | 4.815 | 1744.329 | +21.1% |
+| **TensorRT EP** | **FP16** | **TensorrtExecutionProvider** | **0.860** | **3335.212** | **+131.6%** |
+
+Best observed results from the generated report:
+
+- TensorRT EP FP16 reached **0.860 ms** p50 latency at batch size 1.
+- TensorRT EP FP16 reached **3335.212 samples/sec** at batch size 16.
+- TensorRT EP FP16 improved batch-16 throughput by **+131.6%** versus PyTorch FP32.
+
+## Architecture Pipeline
+
+```text
+PyTorch model -> ONNX export -> ONNX Runtime CUDA -> ONNX Runtime TensorRT Execution Provider
+```
+
+## What This Demonstrates
+
+- GPU inference benchmarking
+- ONNX export and validation
+- TensorRT acceleration
+- FP32 vs FP16 tradeoffs
+- Latency/throughput analysis
+- Reproducible local benchmarking on RTX 3060 Laptop GPU
+
 ## Setup: WSL2 Ubuntu
 
 From inside WSL2 Ubuntu, clone or open this repository and run:
