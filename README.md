@@ -11,6 +11,9 @@ only, measures latency with warmup and CUDA synchronization, writes locally
 generated results to CSV, and generates a small Markdown report plus simple
 plots from those CSV files.
 
+Milestone 4 adds YOLOv8n object detection inference to show the benchmark
+workflow generalizes beyond ResNet18 classification.
+
 ## Results Summary
 
 Local benchmark environment: WSL2 Ubuntu 24.04, Python 3.12.3, PyTorch
@@ -218,6 +221,67 @@ Regenerate plots:
 python scripts/plot_results.py
 ```
 
+## Milestone 4: YOLOv8n Object Detection Baseline
+
+Install or refresh dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Export YOLOv8n to ONNX:
+
+```bash
+python scripts/export_yolov8n_onnx.py \
+  --output models/yolov8n.onnx \
+  --imgsz 640 \
+  --opset 17 \
+  --dynamic
+```
+
+Benchmark YOLOv8n with ONNX Runtime CUDA:
+
+```bash
+python scripts/benchmark_yolov8n_onnxruntime.py \
+  --onnx models/yolov8n.onnx \
+  --batch-sizes 1 2 4 8 \
+  --imgsz 640 \
+  --warmup 20 \
+  --iters 100 \
+  --device cuda \
+  --output results/yolov8n_onnxruntime.csv
+```
+
+Benchmark YOLOv8n with TensorRT EP FP16:
+
+```bash
+python scripts/benchmark_yolov8n_tensorrt_ep.py \
+  --onnx models/yolov8n.onnx \
+  --batch-sizes 1 2 4 8 \
+  --imgsz 640 \
+  --warmup 20 \
+  --iters 100 \
+  --device cuda \
+  --fp16 \
+  --output results/yolov8n_tensorrt_ep_fp16.csv \
+  --trt-cache-dir .trt_cache/yolov8n
+```
+
+Generate the YOLOv8n Markdown report:
+
+```bash
+python scripts/summarize_yolov8n_results.py
+```
+
+Generate YOLOv8n plots:
+
+```bash
+python scripts/plot_yolov8n_results.py
+```
+
+YOLOv8n benchmarks use random image tensors to measure backend inference
+performance. They are not an object detection accuracy or mAP evaluation.
+
 ## Results
 
 Benchmark numbers should be generated locally and not manually invented. Keep
@@ -239,6 +303,8 @@ Placeholder for locally generated results:
 | ResNet18 ONNX Runtime baseline | local | fp32 | `results/resnet18_onnxruntime.csv` |
 | ResNet18 TensorRT EP baseline | local | fp32 | `results/resnet18_tensorrt_ep_fp32.csv` |
 | ResNet18 TensorRT EP baseline | local | fp16 | `results/resnet18_tensorrt_ep_fp16.csv` |
+| YOLOv8n ONNX Runtime baseline | local | fp32 | `results/yolov8n_onnxruntime.csv` |
+| YOLOv8n TensorRT EP baseline | local | fp16 | `results/yolov8n_tensorrt_ep_fp16.csv` |
 
 Generated report artifacts:
 
@@ -248,6 +314,9 @@ Generated report artifacts:
 | Latency plot | `reports/figures/resnet18_latency_vs_batch.png` |
 | Throughput plot | `reports/figures/resnet18_throughput_vs_batch.png` |
 | Memory plot | `reports/figures/resnet18_memory_vs_batch.png` |
+| YOLOv8n Markdown report | `reports/yolov8n_inference_benchmark.md` |
+| YOLOv8n latency plot | `reports/figures/yolov8n_latency_vs_batch.png` |
+| YOLOv8n throughput plot | `reports/figures/yolov8n_throughput_vs_batch.png` |
 
 ## Next Milestones
 

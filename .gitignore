@@ -16,6 +16,7 @@ results/*.json
 .trt_cache/
 
 # Large model and artifact files
+yolov8n.pt
 models/*.onnx
 models/*.engine
 *.pt
