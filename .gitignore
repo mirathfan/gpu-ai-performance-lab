@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local benchmark outputs
+results/*.csv
+results/*.json
+
+# Large model and artifact files
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.engine
+*.plan
+*.onnx
+
+# Nsight / NVIDIA profiler outputs
+*.nsys-rep
+*.qdrep
+*.sqlite
+*.nvvp
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
