@@ -7,10 +7,8 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RESULTS_DIR = REPO_ROOT / "results"
-DEFAULT_OUTPUT = REPO_ROOT / "reports" / "resnet18_pytorch_baseline.md"
 
-REQUIRED_COLUMNS = {
+PYTORCH_REQUIRED_COLUMNS = {
     "batch_size",
     "precision",
     "device",
@@ -37,10 +35,34 @@ REQUIRED_COLUMNS = {
     "gpu_vram_gb",
 }
 
+ONNXRUNTIME_REQUIRED_COLUMNS = {
+    "batch_size",
+    "backend",
+    "precision",
+    "device",
+    "warmup_iters",
+    "measurement_iters",
+    "mean_latency_ms",
+    "p50_latency_ms",
+    "p90_latency_ms",
+    "p95_latency_ms",
+    "p99_latency_ms",
+    "min_latency_ms",
+    "max_latency_ms",
+    "throughput_samples_per_sec",
+    "provider",
+    "model",
+    "timestamp",
+    "platform",
+    "python_version",
+    "onnxruntime_version",
+    "gpu_name",
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate a Markdown summary for ResNet18 PyTorch CSV results."
+        description="Generate a combined ResNet18 inference benchmark report."
     )
     parser.add_argument(
         "--results-dir",
@@ -51,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("reports/resnet18_pytorch_baseline.md"),
+        default=Path("reports/resnet18_inference_benchmark.md"),
         help="Markdown report output path.",
     )
     return parser.parse_args()
@@ -67,14 +89,7 @@ def relative_repo_path(path: Path) -> str:
     return path.relative_to(REPO_ROOT).as_posix()
 
 
-def validate_required_columns(path: Path, rows: list[dict[str, str]]) -> None:
-    missing_columns = REQUIRED_COLUMNS.difference(rows[0].keys())
-    if missing_columns:
-        missing = ", ".join(sorted(missing_columns))
-        raise ValueError(f"{path} is missing required columns: {missing}")
-
-
-def read_csv_rows(path: Path, *, validate: bool = True) -> list[dict[str, str]]:
+def read_csv_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", newline="", encoding="utf-8") as csv_file:
         reader = csv.DictReader(csv_file)
         rows = list(reader)
@@ -82,12 +97,18 @@ def read_csv_rows(path: Path, *, validate: bool = True) -> list[dict[str, str]]:
     if not rows:
         raise ValueError(f"{path} is empty.")
 
-    if validate:
-        validate_required_columns(path, rows)
-
     for row in rows:
         row["source_csv"] = relative_repo_path(path)
     return rows
+
+
+def validate_required_columns(
+    path: Path, rows: list[dict[str, str]], required_columns: set[str]
+) -> None:
+    missing_columns = required_columns.difference(rows[0].keys())
+    if missing_columns:
+        missing = ", ".join(sorted(missing_columns))
+        raise ValueError(f"{path} is missing required columns: {missing}")
 
 
 def is_resnet18_pytorch_csv(path: Path, rows: list[dict[str, str]]) -> bool:
@@ -96,43 +117,76 @@ def is_resnet18_pytorch_csv(path: Path, rows: list[dict[str, str]]) -> bool:
     return "resnet18" in filename and "pytorch" in filename and model == "resnet18"
 
 
-def csv_score(path: Path, precision: str) -> tuple[int, float]:
+def is_resnet18_onnxruntime_csv(path: Path, rows: list[dict[str, str]]) -> bool:
     filename = path.name.lower()
-    score = 0
-    if precision in filename:
-        score += 10
-    if filename == f"resnet18_pytorch_{precision}.csv":
-        score += 100
+    backend = rows[0].get("backend", "").lower()
+    model = rows[0].get("model", "").lower()
+    return (
+        "resnet18" in filename
+        and "onnxruntime" in filename
+        and backend == "onnxruntime"
+        and model == "resnet18"
+    )
+
+
+def csv_score(path: Path, expected_filename: str) -> tuple[int, float]:
+    score = 100 if path.name.lower() == expected_filename else 0
     return score, path.stat().st_mtime
 
 
 def detect_benchmark_csvs(results_dir: Path) -> dict[str, tuple[Path, list[dict[str, str]]]]:
+    """Find the project CSVs used by the combined ResNet18 report.
+
+    PyTorch FP32 and FP16 are required because they are the Milestone 1 baseline.
+    ONNX Runtime FP32 is optional so the report and plots still work before the
+    user has run the Milestone 2 benchmark.
+    """
     candidates: dict[str, list[tuple[tuple[int, float], Path, list[dict[str, str]]]]] = {
-        "fp32": [],
-        "fp16": [],
+        "pytorch_fp32": [],
+        "pytorch_fp16": [],
+        "onnxruntime_fp32": [],
     }
 
     for csv_path in sorted(results_dir.glob("*.csv")):
-        rows = read_csv_rows(csv_path, validate=False)
-        if not is_resnet18_pytorch_csv(csv_path, rows):
+        rows = read_csv_rows(csv_path)
+
+        if is_resnet18_pytorch_csv(csv_path, rows):
+            precision = rows[0].get("precision", "").lower()
+            if precision in {"fp32", "fp16"}:
+                validate_required_columns(csv_path, rows, PYTORCH_REQUIRED_COLUMNS)
+                key = f"pytorch_{precision}"
+                candidates[key].append(
+                    (
+                        csv_score(csv_path, f"resnet18_pytorch_{precision}.csv"),
+                        csv_path,
+                        rows,
+                    )
+                )
             continue
 
-        precision = rows[0].get("precision", "").lower()
-        if precision in candidates:
-            validate_required_columns(csv_path, rows)
-            candidates[precision].append((csv_score(csv_path, precision), csv_path, rows))
+        if is_resnet18_onnxruntime_csv(csv_path, rows):
+            precision = rows[0].get("precision", "").lower()
+            if precision == "fp32":
+                validate_required_columns(csv_path, rows, ONNXRUNTIME_REQUIRED_COLUMNS)
+                candidates["onnxruntime_fp32"].append(
+                    (csv_score(csv_path, "resnet18_onnxruntime.csv"), csv_path, rows)
+                )
 
     detected: dict[str, tuple[Path, list[dict[str, str]]]] = {}
-    for precision, matches in candidates.items():
+    for key, matches in candidates.items():
         if matches:
             _, csv_path, rows = max(matches, key=lambda match: match[0])
-            detected[precision] = (csv_path, rows)
+            detected[key] = (csv_path, rows)
 
-    missing = [precision for precision in ("fp32", "fp16") if precision not in detected]
+    missing = [
+        key.replace("pytorch_", "PyTorch ").upper()
+        for key in ("pytorch_fp32", "pytorch_fp16")
+        if key not in detected
+    ]
     if missing:
         missing_text = ", ".join(missing)
         raise FileNotFoundError(
-            "Could not find ResNet18 PyTorch benchmark CSVs for: "
+            "Could not find required ResNet18 PyTorch benchmark CSVs for: "
             f"{missing_text}. Expected files such as "
             "results/resnet18_pytorch_fp32.csv and "
             "results/resnet18_pytorch_fp16.csv."
@@ -155,11 +209,24 @@ def as_int(row: dict[str, str], column: str) -> int:
         raise ValueError(f"Column {column!r} must contain integer values.") from exc
 
 
+def optional_float(row: dict[str, str], column: str) -> float | None:
+    value = row.get(column, "")
+    if value in ("", "None", "nan", "NaN"):
+        return None
+    return float(value)
+
+
+def has_numeric_column(rows: list[dict[str, str]], column: str) -> bool:
+    return any(optional_float(row, column) is not None for row in rows)
+
+
 def rows_by_batch(rows: list[dict[str, str]]) -> dict[int, dict[str, str]]:
     return {as_int(row, "batch_size"): row for row in rows}
 
 
-def fmt_num(value: float, digits: int = 3) -> str:
+def fmt_num(value: float | None, digits: int = 3) -> str:
+    if value is None:
+        return "n/a"
     return f"{value:.{digits}f}"
 
 
@@ -179,101 +246,6 @@ def markdown_table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join(lines)
 
 
-def result_table(rows: list[dict[str, str]]) -> str:
-    sorted_rows = sorted(rows, key=lambda row: as_int(row, "batch_size"))
-    table_rows: list[list[Any]] = []
-    for row in sorted_rows:
-        table_rows.append(
-            [
-                as_int(row, "batch_size"),
-                fmt_num(as_float(row, "mean_latency_ms")),
-                fmt_num(as_float(row, "p50_latency_ms")),
-                fmt_num(as_float(row, "p90_latency_ms")),
-                fmt_num(as_float(row, "p95_latency_ms")),
-                fmt_num(as_float(row, "p99_latency_ms")),
-                fmt_num(as_float(row, "min_latency_ms")),
-                fmt_num(as_float(row, "max_latency_ms")),
-                fmt_num(as_float(row, "throughput_samples_per_sec")),
-                fmt_num(as_float(row, "peak_gpu_memory_mb")),
-            ]
-        )
-
-    return markdown_table(
-        [
-            "Batch",
-            "Mean ms",
-            "P50 ms",
-            "P90 ms",
-            "P95 ms",
-            "P99 ms",
-            "Min ms",
-            "Max ms",
-            "Throughput samples/s",
-            "Peak memory MB",
-        ],
-        table_rows,
-    )
-
-
-def comparison_table(
-    fp32_rows: list[dict[str, str]], fp16_rows: list[dict[str, str]]
-) -> str:
-    fp32_by_batch = rows_by_batch(fp32_rows)
-    fp16_by_batch = rows_by_batch(fp16_rows)
-    batch_sizes = sorted(set(fp32_by_batch).intersection(fp16_by_batch))
-    if not batch_sizes:
-        raise ValueError("FP32 and FP16 CSV files do not share any batch sizes.")
-
-    table_rows: list[list[Any]] = []
-    for batch_size in batch_sizes:
-        fp32 = fp32_by_batch[batch_size]
-        fp16 = fp16_by_batch[batch_size]
-
-        fp32_p50 = as_float(fp32, "p50_latency_ms")
-        fp16_p50 = as_float(fp16, "p50_latency_ms")
-        fp32_throughput = as_float(fp32, "throughput_samples_per_sec")
-        fp16_throughput = as_float(fp16, "throughput_samples_per_sec")
-        fp32_memory = as_float(fp32, "peak_gpu_memory_mb")
-        fp16_memory = as_float(fp16, "peak_gpu_memory_mb")
-
-        latency_delta_pct = (fp16_p50 - fp32_p50) / fp32_p50 * 100.0
-        throughput_delta_pct = (
-            (fp16_throughput - fp32_throughput) / fp32_throughput * 100.0
-        )
-        memory_delta_mb = fp16_memory - fp32_memory
-
-        table_rows.append(
-            [
-                batch_size,
-                fmt_num(fp32_p50),
-                fmt_num(fp16_p50),
-                fmt_pct(latency_delta_pct),
-                fmt_num(fp32_throughput),
-                fmt_num(fp16_throughput),
-                fmt_pct(throughput_delta_pct),
-                fmt_num(fp32_memory),
-                fmt_num(fp16_memory),
-                fmt_num(memory_delta_mb),
-            ]
-        )
-
-    return markdown_table(
-        [
-            "Batch",
-            "FP32 P50 ms",
-            "FP16 P50 ms",
-            "FP16 latency delta",
-            "FP32 samples/s",
-            "FP16 samples/s",
-            "FP16 throughput delta",
-            "FP32 memory MB",
-            "FP16 memory MB",
-            "Memory delta MB",
-        ],
-        table_rows,
-    )
-
-
 def first_value(rows: list[dict[str, str]], column: str) -> str:
     for row in rows:
         value = row.get(column, "")
@@ -282,53 +254,180 @@ def first_value(rows: list[dict[str, str]], column: str) -> str:
     return "n/a"
 
 
+def backend_label(key: str) -> str:
+    labels = {
+        "pytorch_fp32": "PyTorch FP32",
+        "pytorch_fp16": "PyTorch FP16",
+        "onnxruntime_fp32": "ONNX Runtime FP32",
+    }
+    return labels[key]
+
+
+def result_table(rows: list[dict[str, str]], *, include_provider: bool = False) -> str:
+    include_memory = has_numeric_column(rows, "peak_gpu_memory_mb")
+    headers = [
+        "Batch",
+        "Mean ms",
+        "P50 ms",
+        "P90 ms",
+        "P95 ms",
+        "P99 ms",
+        "Min ms",
+        "Max ms",
+        "Throughput samples/s",
+    ]
+    if include_memory:
+        headers.append("Peak memory MB")
+    if include_provider:
+        headers.append("Provider")
+
+    table_rows: list[list[Any]] = []
+    for row in sorted(rows, key=lambda item: as_int(item, "batch_size")):
+        table_row: list[Any] = [
+            as_int(row, "batch_size"),
+            fmt_num(as_float(row, "mean_latency_ms")),
+            fmt_num(as_float(row, "p50_latency_ms")),
+            fmt_num(as_float(row, "p90_latency_ms")),
+            fmt_num(as_float(row, "p95_latency_ms")),
+            fmt_num(as_float(row, "p99_latency_ms")),
+            fmt_num(as_float(row, "min_latency_ms")),
+            fmt_num(as_float(row, "max_latency_ms")),
+            fmt_num(as_float(row, "throughput_samples_per_sec")),
+        ]
+        if include_memory:
+            table_row.append(fmt_num(optional_float(row, "peak_gpu_memory_mb")))
+        if include_provider:
+            table_row.append(first_value([row], "provider"))
+        table_rows.append(table_row)
+
+    return markdown_table(headers, table_rows)
+
+
 def system_metadata_table(
-    fp32_path: Path,
-    fp32_rows: list[dict[str, str]],
-    fp16_path: Path,
-    fp16_rows: list[dict[str, str]],
+    detected: dict[str, tuple[Path, list[dict[str, str]]]]
 ) -> str:
-    rows = fp32_rows + fp16_rows
-    return markdown_table(
-        ["Field", "Value"],
-        [
-            ["GPU", first_value(rows, "gpu_name")],
-            ["GPU VRAM GB", first_value(rows, "gpu_vram_gb")],
-            ["Platform", first_value(rows, "platform")],
-            ["Python", first_value(rows, "python_version")],
-            ["PyTorch", first_value(rows, "pytorch_version")],
-            ["CUDA available", first_value(rows, "cuda_available")],
-            ["CUDA version", first_value(rows, "cuda_version")],
-            ["FP32 source CSV", relative_repo_path(fp32_path)],
-            ["FP16 source CSV", relative_repo_path(fp16_path)],
-            ["FP32 timestamp", first_value(fp32_rows, "timestamp")],
-            ["FP16 timestamp", first_value(fp16_rows, "timestamp")],
-        ],
-    )
+    all_rows = [row for _, rows in detected.values() for row in rows]
+    table_rows = [
+        ["GPU", first_value(all_rows, "gpu_name")],
+        ["GPU VRAM GB", first_value(all_rows, "gpu_vram_gb")],
+        ["Platform", first_value(all_rows, "platform")],
+        ["Python", first_value(all_rows, "python_version")],
+        ["PyTorch", first_value(all_rows, "pytorch_version")],
+        ["ONNX Runtime", first_value(all_rows, "onnxruntime_version")],
+        ["CUDA available", first_value(all_rows, "cuda_available")],
+        ["CUDA version", first_value(all_rows, "cuda_version")],
+    ]
+
+    for key in ("pytorch_fp32", "pytorch_fp16", "onnxruntime_fp32"):
+        if key in detected:
+            path, rows = detected[key]
+            table_rows.append([f"{backend_label(key)} source CSV", relative_repo_path(path)])
+            table_rows.append([f"{backend_label(key)} timestamp", first_value(rows, "timestamp")])
+
+    return markdown_table(["Field", "Value"], table_rows)
 
 
 def benchmark_config_table(
-    fp32_rows: list[dict[str, str]], fp16_rows: list[dict[str, str]]
+    detected: dict[str, tuple[Path, list[dict[str, str]]]]
 ) -> str:
-    rows = fp32_rows + fp16_rows
-    batch_sizes = sorted({as_int(row, "batch_size") for row in rows})
-    precisions = sorted({row["precision"] for row in rows})
-    devices = sorted({row["device"] for row in rows})
+    all_rows = [row for _, rows in detected.values() for row in rows]
+    batch_sizes = sorted({as_int(row, "batch_size") for row in all_rows})
+    backends = [backend_label(key) for key in detected]
+    devices = sorted({row["device"] for row in all_rows})
+    precisions = sorted({row["precision"] for row in all_rows})
 
     return markdown_table(
         ["Field", "Value"],
         [
-            ["Model", first_value(rows, "model")],
-            ["Weights", first_value(rows, "weights")],
-            ["Framework", "PyTorch"],
+            ["Model", first_value(all_rows, "model")],
+            ["Weights", first_value(all_rows, "weights")],
+            ["Backends", ", ".join(backends)],
             ["Input shape", "[batch_size, 3, 224, 224]"],
             ["Batch sizes", ", ".join(str(batch_size) for batch_size in batch_sizes)],
             ["Precision modes", ", ".join(precisions)],
             ["Device", ", ".join(devices)],
-            ["Warmup iterations", first_value(rows, "warmup_iters")],
-            ["Measurement iterations", first_value(rows, "measurement_iters")],
+            ["Warmup iterations", first_value(all_rows, "warmup_iters")],
+            ["Measurement iterations", first_value(all_rows, "measurement_iters")],
         ],
     )
+
+
+def comparison_table(
+    detected: dict[str, tuple[Path, list[dict[str, str]]]]
+) -> str:
+    series = {key: rows_by_batch(rows) for key, (_, rows) in detected.items()}
+    required_keys = ["pytorch_fp32", "pytorch_fp16"]
+    compare_keys = required_keys + (
+        ["onnxruntime_fp32"] if "onnxruntime_fp32" in detected else []
+    )
+    batch_sets = [set(series[key]) for key in compare_keys]
+    batch_sizes = sorted(set.intersection(*batch_sets))
+    if not batch_sizes:
+        raise ValueError("Detected CSV files do not share any comparable batch sizes.")
+
+    headers = [
+        "Batch",
+        "PyTorch FP32 P50 ms",
+        "PyTorch FP16 P50 ms",
+        "FP16 latency delta",
+        "PyTorch FP32 samples/s",
+        "PyTorch FP16 samples/s",
+        "FP16 throughput delta",
+    ]
+    if "onnxruntime_fp32" in detected:
+        headers.extend(
+            [
+                "ONNX Runtime FP32 P50 ms",
+                "ONNX latency delta",
+                "ONNX Runtime samples/s",
+                "ONNX throughput delta",
+            ]
+        )
+
+    table_rows: list[list[Any]] = []
+    for batch_size in batch_sizes:
+        torch_fp32 = series["pytorch_fp32"][batch_size]
+        torch_fp16 = series["pytorch_fp16"][batch_size]
+
+        torch_fp32_p50 = as_float(torch_fp32, "p50_latency_ms")
+        torch_fp16_p50 = as_float(torch_fp16, "p50_latency_ms")
+        torch_fp32_throughput = as_float(torch_fp32, "throughput_samples_per_sec")
+        torch_fp16_throughput = as_float(torch_fp16, "throughput_samples_per_sec")
+
+        row: list[Any] = [
+            batch_size,
+            fmt_num(torch_fp32_p50),
+            fmt_num(torch_fp16_p50),
+            fmt_pct((torch_fp16_p50 - torch_fp32_p50) / torch_fp32_p50 * 100.0),
+            fmt_num(torch_fp32_throughput),
+            fmt_num(torch_fp16_throughput),
+            fmt_pct(
+                (torch_fp16_throughput - torch_fp32_throughput)
+                / torch_fp32_throughput
+                * 100.0
+            ),
+        ]
+
+        if "onnxruntime_fp32" in detected:
+            onnx_row = series["onnxruntime_fp32"][batch_size]
+            onnx_p50 = as_float(onnx_row, "p50_latency_ms")
+            onnx_throughput = as_float(onnx_row, "throughput_samples_per_sec")
+            row.extend(
+                [
+                    fmt_num(onnx_p50),
+                    fmt_pct((onnx_p50 - torch_fp32_p50) / torch_fp32_p50 * 100.0),
+                    fmt_num(onnx_throughput),
+                    fmt_pct(
+                        (onnx_throughput - torch_fp32_throughput)
+                        / torch_fp32_throughput
+                        * 100.0
+                    ),
+                ]
+            )
+
+        table_rows.append(row)
+
+    return markdown_table(headers, table_rows)
 
 
 def fp16_memory_observation(
@@ -371,57 +470,91 @@ def fp16_memory_observation(
 
 
 def build_report(
-    fp32_path: Path,
-    fp32_rows: list[dict[str, str]],
-    fp16_path: Path,
-    fp16_rows: list[dict[str, str]],
+    detected: dict[str, tuple[Path, list[dict[str, str]]]]
 ) -> str:
+    _, fp32_rows = detected["pytorch_fp32"]
+    _, fp16_rows = detected["pytorch_fp16"]
+    onnx_available = "onnxruntime_fp32" in detected
+
     sections = [
-        "# ResNet18 PyTorch Baseline Report",
+        "# ResNet18 Inference Benchmark Report",
         "",
-        "This report summarizes locally generated PyTorch ResNet18 inference "
-        "benchmark CSV files from `results/`. Benchmark numbers should come "
-        "from actual runs only and should not be manually invented.",
+        "This report summarizes locally generated ResNet18 inference benchmark "
+        "CSV files from `results/`. Benchmark numbers should come from actual "
+        "runs only and should not be manually invented.",
+        "",
+        "TensorRT is not added yet; this milestone compares PyTorch and ONNX "
+        "Runtime only.",
         "",
         "## System and Hardware Metadata",
         "",
-        system_metadata_table(fp32_path, fp32_rows, fp16_path, fp16_rows),
+        system_metadata_table(detected),
         "",
         "## Benchmark Configuration",
         "",
-        benchmark_config_table(fp32_rows, fp16_rows),
+        benchmark_config_table(detected),
         "",
-        "## FP32 Results",
+        "## PyTorch FP32 Results",
         "",
         result_table(fp32_rows),
         "",
-        "## FP16 Results",
+        "## PyTorch FP16 Results",
         "",
         result_table(fp16_rows),
         "",
-        "## FP32 vs FP16 Comparison",
-        "",
-        comparison_table(fp32_rows, fp16_rows),
-        "",
-        "## Latency vs Throughput",
-        "",
-        "Latency measures how long one inference batch takes to complete. "
-        "Throughput measures how many input samples are processed per second. "
-        "A larger batch can increase throughput even when per-batch latency "
-        "also increases, so both metrics are useful when choosing a deployment "
-        "batch size.",
-        "",
-        "## FP16 Memory Observation",
-        "",
-        fp16_memory_observation(fp32_rows, fp16_rows),
-        "",
-        "## Reproducibility Note",
-        "",
-        "These tables are generated from local CSV files in `results/`. Do not "
-        "edit benchmark numbers by hand; rerun the benchmark scripts when the "
-        "environment, code, driver, or dependencies change.",
-        "",
     ]
+
+    if onnx_available:
+        _, onnx_rows = detected["onnxruntime_fp32"]
+        sections.extend(
+            [
+                "## ONNX Runtime FP32 Results",
+                "",
+                result_table(onnx_rows, include_provider=True),
+                "",
+            ]
+        )
+    else:
+        sections.extend(
+            [
+                "## ONNX Runtime FP32 Results",
+                "",
+                "`results/resnet18_onnxruntime.csv` was not found. Run the "
+                "Milestone 2 ONNX Runtime benchmark to add this section.",
+                "",
+            ]
+        )
+
+    sections.extend(
+        [
+            "## Backend Comparison",
+            "",
+            comparison_table(detected),
+            "",
+            "## Latency vs Throughput",
+            "",
+            "Latency measures how long one inference batch takes to complete. "
+            "Throughput measures how many input samples are processed per second. "
+            "A larger batch can increase throughput even when per-batch latency "
+            "also increases, so both metrics are useful when choosing a deployment "
+            "batch size.",
+            "",
+            "## FP16 Memory Observation",
+            "",
+            fp16_memory_observation(fp32_rows, fp16_rows),
+            "",
+            "ONNX Runtime peak GPU memory is not reported by the current benchmark "
+            "script because ONNX Runtime does not expose a simple peak CUDA "
+            "allocation counter through this beginner-readable path.",
+            "",
+            "## Reproducibility Note",
+            "",
+            "These tables are generated from local CSV files in `results/`. Do not "
+            "edit benchmark numbers by hand; rerun the benchmark scripts when the "
+            "environment, code, driver, or dependencies change.",
+            "",
+        ]
+    )
     return "\n".join(sections)
 
 
@@ -431,14 +564,16 @@ def main() -> int:
     output_path = resolve_repo_path(args.output)
 
     detected = detect_benchmark_csvs(results_dir)
-    fp32_path, fp32_rows = detected["fp32"]
-    fp16_path, fp16_rows = detected["fp16"]
-
-    report = build_report(fp32_path, fp32_rows, fp16_path, fp16_rows)
+    report = build_report(detected)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")
 
     print(f"Wrote report: {output_path}")
+    if "onnxruntime_fp32" not in detected:
+        print(
+            "Note: results/resnet18_onnxruntime.csv was not found, so ONNX "
+            "Runtime results were not included yet."
+        )
     return 0
 
 

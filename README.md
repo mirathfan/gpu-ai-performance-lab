@@ -5,10 +5,11 @@ optimization and GPU benchmarking. The goal is to build a resume-grade,
 reproducible lab for PyTorch, ONNX Runtime, TensorRT, CUDA, and LLM performance
 work without inventing results.
 
-The current first milestone is a PyTorch ResNet18 baseline benchmark. It checks
-that GPU execution works, runs inference only, measures latency with warmup and
-CUDA synchronization, writes locally generated results to CSV, and generates a
-small Markdown report plus simple plots from those CSV files.
+The first milestones build a ResNet18 inference benchmark path across PyTorch
+and ONNX Runtime. The project checks that GPU execution works, runs inference
+only, measures latency with warmup and CUDA synchronization, writes locally
+generated results to CSV, and generates a small Markdown report plus simple
+plots from those CSV files.
 
 ## Setup: WSL2 Ubuntu
 
@@ -68,6 +69,67 @@ python scripts/plot_results.py
 For a CPU-only smoke test, use `--device cpu`. FP16 is intentionally limited to
 CUDA in this first benchmark script.
 
+## Milestone 2: ONNX Runtime ResNet18 Baseline
+
+Install or refresh dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Export ResNet18 to ONNX with a dynamic batch dimension:
+
+```bash
+python scripts/export_resnet18_onnx.py \
+  --batch-size 1 \
+  --opset 17 \
+  --output models/resnet18.onnx \
+  --dynamic-batch
+```
+
+Validate ONNX Runtime output against PyTorch:
+
+```bash
+python scripts/validate_resnet18_onnx.py \
+  --onnx models/resnet18.onnx \
+  --batch-size 1 \
+  --device cuda \
+  --atol 1e-2 \
+  --rtol 1e-3
+```
+
+The validation script prints the actual max and mean absolute differences, the
+configured tolerances, and the top-1 class from both PyTorch and ONNX Runtime.
+Small CUDA numerical differences are expected; validation passes when
+`numpy.allclose` passes, or when top-1 matches and the max absolute difference
+is still small.
+
+Benchmark ONNX Runtime FP32:
+
+```bash
+python scripts/benchmark_resnet18_onnxruntime.py \
+  --onnx models/resnet18.onnx \
+  --batch-sizes 1 4 8 16 \
+  --warmup 20 \
+  --iters 100 \
+  --device cuda \
+  --output results/resnet18_onnxruntime.csv
+```
+
+Regenerate the combined Markdown report:
+
+```bash
+python scripts/summarize_results.py
+```
+
+Regenerate plots:
+
+```bash
+python scripts/plot_results.py
+```
+
+TensorRT is not part of Milestone 2.
+
 ## Results
 
 Benchmark numbers should be generated locally and not manually invented. Keep
@@ -76,7 +138,8 @@ Git so local hardware measurements do not get committed by accident.
 
 Generated reports and figures under `reports/` may be committed because they
 are presentation artifacts derived from local CSV files. The raw CSV files stay
-ignored by Git.
+ignored by Git. ONNX model files under `models/` are also ignored because they
+are generated artifacts.
 
 Placeholder for locally generated results:
 
@@ -84,19 +147,19 @@ Placeholder for locally generated results:
 | --- | --- | --- | --- |
 | ResNet18 PyTorch baseline | local | fp32 | `results/resnet18_pytorch_fp32.csv` |
 | ResNet18 PyTorch baseline | local | fp16 | `results/resnet18_pytorch_fp16.csv` |
+| ResNet18 ONNX Runtime baseline | local | fp32 | `results/resnet18_onnxruntime.csv` |
 
 Generated report artifacts:
 
 | Artifact | Path |
 | --- | --- |
-| Markdown report | `reports/resnet18_pytorch_baseline.md` |
+| Combined Markdown report | `reports/resnet18_inference_benchmark.md` |
 | Latency plot | `reports/figures/resnet18_latency_vs_batch.png` |
 | Throughput plot | `reports/figures/resnet18_throughput_vs_batch.png` |
 | Memory plot | `reports/figures/resnet18_memory_vs_batch.png` |
 
 ## Next Milestones
 
-- ONNX export and ONNX Runtime benchmark
 - TensorRT FP32/FP16 benchmark
 - CUDA Monte Carlo simulation
 - CUDA deep learning kernels

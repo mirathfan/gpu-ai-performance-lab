@@ -62,44 +62,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise RuntimeError("FP16 benchmarking is only enabled on CUDA for this script.")
 
 
-def load_resnet18(device: torch.device, precision: str) -> torch.nn.Module:
-    try:
-        from torchvision import models
-    except ImportError as exc:
-        raise RuntimeError(
-            "torchvision is not installed. Activate your virtual environment and run "
-            "`pip install -r requirements.txt` from the repo root."
-        ) from exc
-
-    weights_enum = getattr(models, "ResNet18_Weights", None)
-    try:
-        if weights_enum is not None:
-            weights = weights_enum.DEFAULT
-            model = models.resnet18(weights=weights)
-            weights_label = str(weights)
-        else:
-            model = models.resnet18(pretrained=True)
-            weights_label = "pretrained=True"
-    except Exception as exc:
-        print(
-            "Could not load pretrained ResNet18 weights; falling back to weights=None. "
-            f"Reason: {exc}"
-        )
-        if weights_enum is not None:
-            model = models.resnet18(weights=None)
-        else:
-            model = models.resnet18(pretrained=False)
-        weights_label = "None"
-
-    model.eval()
-    model.to(device)
-    if precision == "fp16":
-        model.half()
-
-    model.weights_label = weights_label  # type: ignore[attr-defined]
-    return model
-
-
 def make_input(batch_size: int, device: torch.device, precision: str) -> torch.Tensor:
     torch = import_torch()
     x = torch.randn(batch_size, 3, 224, 224, device=device)
@@ -223,10 +185,11 @@ def main() -> int:
     validate_args(args)
 
     torch = import_torch()
+    from gpu_ai_perf.resnet import load_resnet18_model
     from gpu_ai_perf.system_info import get_system_info
 
     device = torch.device(args.device)
-    model = load_resnet18(device, args.precision)
+    model, weights_label = load_resnet18_model(device=device, precision=args.precision)
     system_info = get_system_info()
 
     rows: list[dict[str, Any]] = []
@@ -241,7 +204,7 @@ def main() -> int:
             iters=args.iters,
         )
         row["model"] = "resnet18"
-        row["weights"] = getattr(model, "weights_label", "unknown")
+        row["weights"] = weights_label
         row.update(system_info)
         rows.append(row)
 
