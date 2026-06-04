@@ -14,6 +14,13 @@ plots from those CSV files.
 Milestone 4 adds YOLOv8n object detection inference to show the benchmark
 workflow generalizes beyond ResNet18 classification.
 
+## Current Benchmarks
+
+| Model | Task | Benchmark path | Report |
+| --- | --- | --- | --- |
+| ResNet18 | Image classification | PyTorch FP32/FP16 -> ONNX Runtime CUDA FP32 -> TensorRT EP FP32/FP16 | `reports/resnet18_inference_benchmark.md` |
+| YOLOv8n | Object detection | ONNX Runtime CUDA FP32 -> TensorRT EP FP16 | `reports/yolov8n_inference_benchmark.md` |
+
 ## Results Summary
 
 Local benchmark environment: WSL2 Ubuntu 24.04, Python 3.12.3, PyTorch
@@ -34,6 +41,13 @@ Best observed results from the generated report:
 - TensorRT EP FP16 reached **3335.212 samples/sec** at batch size 16.
 - TensorRT EP FP16 improved batch-16 throughput by **+131.6%** versus PyTorch FP32.
 
+YOLOv8n key results from the generated report:
+
+- TensorRT EP FP16 reached **4.714 ms** p50 latency at batch size 1.
+- TensorRT EP FP16 reached **432.366 images/sec** at batch size 8.
+- TensorRT EP FP16 improved batch-8 throughput by **+84.8%** versus ONNX Runtime CUDA FP32.
+- TensorRT EP FP16 reduced batch-1 p50 latency by **-44.6%** versus ONNX Runtime CUDA FP32.
+
 ## Architecture Pipeline
 
 ```text
@@ -48,6 +62,12 @@ PyTorch model -> ONNX export -> ONNX Runtime CUDA -> ONNX Runtime TensorRT Execu
 - FP32 vs FP16 tradeoffs
 - Latency/throughput analysis
 - Reproducible local benchmarking on RTX 3060 Laptop GPU
+
+## Resume Summary
+
+- Built a reproducible GPU inference benchmarking lab on WSL2 Ubuntu with an RTX 3060 Laptop GPU, measuring latency percentiles and throughput across PyTorch, ONNX Runtime CUDA, and ONNX Runtime TensorRT Execution Provider.
+- Exported and validated deep learning models through ONNX, then benchmarked FP32 and FP16 inference paths for ResNet18 classification and YOLOv8n object detection with local CSV, report, and plot generation.
+- Demonstrated TensorRT EP acceleration and precision tradeoffs, including ResNet18 TensorRT EP FP16 at 0.860 ms batch-1 p50 latency and YOLOv8n TensorRT EP FP16 at 4.714 ms batch-1 p50 latency.
 
 ## Setup: WSL2 Ubuntu
 
