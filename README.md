@@ -14,12 +14,16 @@ plots from those CSV files.
 Milestone 4 adds YOLOv8n object detection inference to show the benchmark
 workflow generalizes beyond ResNet18 classification.
 
+A CUDA finance module adds Monte Carlo pricing for European call and put
+options, comparing a C++ CPU baseline against a CUDA/cuRAND implementation.
+
 ## Current Benchmarks
 
 | Model | Task | Benchmark path | Report |
 | --- | --- | --- | --- |
 | ResNet18 | Image classification | PyTorch FP32/FP16 -> ONNX Runtime CUDA FP32 -> TensorRT EP FP32/FP16 | `reports/resnet18_inference_benchmark.md` |
 | YOLOv8n | Object detection | ONNX Runtime CUDA FP32 -> TensorRT EP FP16 | `reports/yolov8n_inference_benchmark.md` |
+| European options | Monte Carlo pricing | C++ CPU baseline -> CUDA cuRAND kernel | `cuda_finance/monte_carlo_option_pricing/reports/monte_carlo_benchmark.md` |
 
 ## Results Summary
 
@@ -48,6 +52,11 @@ YOLOv8n key results from the generated report:
 - TensorRT EP FP16 improved batch-8 throughput by **+84.8%** versus ONNX Runtime CUDA FP32.
 - TensorRT EP FP16 reduced batch-1 p50 latency by **-44.6%** versus ONNX Runtime CUDA FP32.
 
+CUDA Monte Carlo option pricing results from the generated report:
+
+- CUDA reached **7.25x speedup** versus the CPU baseline at **10M paths**.
+- CUDA was slower at small path counts because kernel launch, cuRAND setup, and host/device coordination overhead dominated the short workloads.
+
 ## Architecture Pipeline
 
 ```text
@@ -68,6 +77,8 @@ PyTorch model -> ONNX export -> ONNX Runtime CUDA -> ONNX Runtime TensorRT Execu
 - Built a reproducible GPU inference benchmarking lab on WSL2 Ubuntu with an RTX 3060 Laptop GPU, measuring latency percentiles and throughput across PyTorch, ONNX Runtime CUDA, and ONNX Runtime TensorRT Execution Provider.
 - Exported and validated deep learning models through ONNX, then benchmarked FP32 and FP16 inference paths for ResNet18 classification and YOLOv8n object detection with local CSV, report, and plot generation.
 - Demonstrated TensorRT EP acceleration and precision tradeoffs, including ResNet18 TensorRT EP FP16 at 0.860 ms batch-1 p50 latency and YOLOv8n TensorRT EP FP16 at 4.714 ms batch-1 p50 latency.
+- Implemented a C++/CUDA Monte Carlo European option pricing benchmark with CPU and cuRAND GPU paths for finance-oriented GPU performance analysis.
+- Measured CUDA Monte Carlo scaling behavior on an RTX 3060 Laptop GPU, including a 7.25x speedup at 10M simulated paths and slower CUDA performance for small path counts where launch/setup overhead dominates.
 
 ## Setup: WSL2 Ubuntu
 
@@ -312,7 +323,9 @@ Generated reports and figures under `reports/` may be committed because they
 are presentation artifacts derived from local CSV files. The raw CSV files stay
 ignored by Git. ONNX model files under `models/` are also ignored because they
 are generated artifacts. TensorRT cache files under `.trt_cache/` are ignored
-for the same reason.
+for the same reason. For the CUDA finance module, commit the generated
+Markdown report after a real local run, but keep the generated CSV and PNG
+plots ignored.
 
 Placeholder for locally generated results:
 
@@ -325,6 +338,7 @@ Placeholder for locally generated results:
 | ResNet18 TensorRT EP baseline | local | fp16 | `results/resnet18_tensorrt_ep_fp16.csv` |
 | YOLOv8n ONNX Runtime baseline | local | fp32 | `results/yolov8n_onnxruntime.csv` |
 | YOLOv8n TensorRT EP baseline | local | fp16 | `results/yolov8n_tensorrt_ep_fp16.csv` |
+| Monte Carlo option pricing CPU/CUDA | local | fp64 payoff math | `cuda_finance/monte_carlo_option_pricing/results/monte_carlo_benchmark.csv` |
 
 Generated report artifacts:
 
@@ -337,10 +351,14 @@ Generated report artifacts:
 | YOLOv8n Markdown report | `reports/yolov8n_inference_benchmark.md` |
 | YOLOv8n latency plot | `reports/figures/yolov8n_latency_vs_batch.png` |
 | YOLOv8n throughput plot | `reports/figures/yolov8n_throughput_vs_batch.png` |
+| Monte Carlo module README | `cuda_finance/monte_carlo_option_pricing/README.md` |
+| Monte Carlo Markdown report | `cuda_finance/monte_carlo_option_pricing/reports/monte_carlo_benchmark.md` |
+| Monte Carlo runtime plot | `cuda_finance/monte_carlo_option_pricing/reports/runtime_vs_paths.png` |
+| Monte Carlo speedup plot | `cuda_finance/monte_carlo_option_pricing/reports/speedup_vs_paths.png` |
 
 ## Next Milestones
 
 - Raw TensorRT engine API benchmark
-- CUDA Monte Carlo simulation
+- CUDA Monte Carlo Greeks and variance reduction extensions
 - CUDA deep learning kernels
 - LLM inference benchmark

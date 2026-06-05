@@ -4,6 +4,21 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
+# Build outputs
+build/
+cuda_finance/**/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.o
+*.obj
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
+
 # Virtual environments
 .venv/
 venv/
@@ -13,6 +28,8 @@ ENV/
 # Local benchmark outputs
 results/*.csv
 results/*.json
+cuda_finance/**/results/*.csv
+cuda_finance/**/reports/*.png
 .trt_cache/
 
 # Large model and artifact files
