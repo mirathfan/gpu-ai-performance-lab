@@ -1,9 +1,9 @@
 # GPU AI Performance Lab
 
-GPU AI Performance Lab is a hands-on project for deep learning inference
-optimization and GPU benchmarking. The goal is to build a resume-grade,
-reproducible lab for PyTorch, ONNX Runtime, TensorRT, CUDA, and LLM performance
-work without inventing results.
+GPU AI Performance Lab compares deep learning inference backends and GPU
+performance on an RTX 3060 Laptop GPU. It benchmarks PyTorch, ONNX Runtime
+CUDA, and the TensorRT execution provider, and includes a C++/CUDA Monte Carlo
+option-pricing experiment.
 
 The first milestones build a ResNet18 inference benchmark path across PyTorch
 and ONNX Runtime. The project checks that GPU execution works, runs inference
@@ -21,9 +21,9 @@ options, comparing a C++ CPU baseline against a CUDA/cuRAND implementation.
 
 | Model | Task | Benchmark path | Report |
 | --- | --- | --- | --- |
-| ResNet18 | Image classification | PyTorch FP32/FP16 -> ONNX Runtime CUDA FP32 -> TensorRT EP FP32/FP16 | `reports/resnet18_inference_benchmark.md` |
-| YOLOv8n | Object detection | ONNX Runtime CUDA FP32 -> TensorRT EP FP16 | `reports/yolov8n_inference_benchmark.md` |
-| European options | Monte Carlo pricing | C++ CPU baseline -> CUDA cuRAND kernel | `cuda_finance/monte_carlo_option_pricing/reports/monte_carlo_benchmark.md` |
+| ResNet18 | Image classification | PyTorch FP32/FP16 -> ONNX Runtime CUDA FP32 -> TensorRT EP FP32/FP16 | [ResNet18 report](reports/resnet18_inference_benchmark.md) |
+| YOLOv8n | Object detection | ONNX Runtime CUDA FP32 -> TensorRT EP FP16 | [YOLOv8n report](reports/yolov8n_inference_benchmark.md) |
+| European options | Monte Carlo pricing | C++ CPU baseline -> CUDA cuRAND kernel | [Monte Carlo report](cuda_finance/monte_carlo_option_pricing/reports/monte_carlo_benchmark.md) |
 
 ## Results Summary
 
@@ -57,6 +57,12 @@ CUDA Monte Carlo option pricing results from the generated report:
 - CUDA reached **7.25x speedup** versus the CPU baseline at **10M paths**.
 - CUDA was slower at small path counts because kernel launch, cuRAND setup, and host/device coordination overhead dominated the short workloads.
 
+## Evidence and limits
+
+The reports above contain the saved measurements, configurations, and available environment details. [Downloadable summary tables](reports/snapshots/README.md) preserve those published values as CSV with source commit and file hashes. They are **exports of the rounded report tables**, not original raw samples or a new benchmark run.
+
+The original inference CSV files are not checked in, so the historical measurements cannot be independently recomputed from raw samples in this repository. Future measured runs can be published under `results/published/<run-id>/` with original outputs, resolved environment, command, and commit SHA; see the [evidence guide](docs/benchmark-evidence.md).
+
 ## Architecture Pipeline
 
 ```text
@@ -71,14 +77,6 @@ PyTorch model -> ONNX export -> ONNX Runtime CUDA -> ONNX Runtime TensorRT Execu
 - FP32 vs FP16 tradeoffs
 - Latency/throughput analysis
 - Reproducible local benchmarking on RTX 3060 Laptop GPU
-
-## Resume Summary
-
-- Built a reproducible GPU inference benchmarking lab on WSL2 Ubuntu with an RTX 3060 Laptop GPU, measuring latency percentiles and throughput across PyTorch, ONNX Runtime CUDA, and ONNX Runtime TensorRT Execution Provider.
-- Exported and validated deep learning models through ONNX, then benchmarked FP32 and FP16 inference paths for ResNet18 classification and YOLOv8n object detection with local CSV, report, and plot generation.
-- Demonstrated TensorRT EP acceleration and precision tradeoffs, including ResNet18 TensorRT EP FP16 at 0.860 ms batch-1 p50 latency and YOLOv8n TensorRT EP FP16 at 4.714 ms batch-1 p50 latency.
-- Implemented a C++/CUDA Monte Carlo European option pricing benchmark with CPU and cuRAND GPU paths for finance-oriented GPU performance analysis.
-- Measured CUDA Monte Carlo scaling behavior on an RTX 3060 Laptop GPU, including a 7.25x speedup at 10M simulated paths and slower CUDA performance for small path counts where launch/setup overhead dominates.
 
 ## Setup: WSL2 Ubuntu
 
@@ -316,18 +314,18 @@ performance. They are not an object detection accuracy or mAP evaluation.
 ## Results
 
 Benchmark numbers should be generated locally and not manually invented. Keep
-raw CSV outputs under `results/`; generated CSV and JSON files are ignored by
-Git so local hardware measurements do not get committed by accident.
+local CSV outputs under `results/`; top-level CSV and JSON files are ignored by
+Git. Deliberately reviewed run evidence belongs under `results/published/<run-id>/`.
 
 Generated reports and figures under `reports/` may be committed because they
-are presentation artifacts derived from local CSV files. The raw CSV files stay
-ignored by Git. ONNX model files under `models/` are also ignored because they
+are presentation artifacts derived from local CSV files. Uncurated local CSV files stay
+ignored by Git; selected run evidence should be published with provenance. ONNX model files under `models/` are also ignored because they
 are generated artifacts. TensorRT cache files under `.trt_cache/` are ignored
 for the same reason. For the CUDA finance module, commit the generated
 Markdown report after a real local run, but keep the generated CSV and PNG
 plots ignored.
 
-Placeholder for locally generated results:
+Local output paths:
 
 | Benchmark | Device | Precision | Output |
 | --- | --- | --- | --- |

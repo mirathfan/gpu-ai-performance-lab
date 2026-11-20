@@ -1,0 +1,5 @@
+Batch,Image size,Mean ms,P50 ms,P90 ms,P95 ms,P99 ms,Min ms,Max ms,Throughput images/s,Provider
+1,640,4.765,4.714,6.941,7.436,7.852,3.620,8.053,209.873,TensorrtExecutionProvider
+2,640,6.139,6.253,6.584,6.799,6.881,5.463,7.039,325.793,TensorrtExecutionProvider
+4,640,10.195,10.022,11.745,11.958,12.172,9.435,12.254,392.343,TensorrtExecutionProvider
+8,640,18.503,18.427,18.913,19.144,20.051,17.845,20.772,432.366,TensorrtExecutionProvider

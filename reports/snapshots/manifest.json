@@ -1,0 +1,65 @@
+{
+  "kind": "rounded_report_table_export",
+  "source_commit": "347add221331d6dbc6c415dfb7978bf7dba2f9ba",
+  "raw_measurements_available": false,
+  "reports": [
+    {
+      "path": "reports/resnet18_inference_benchmark.md",
+      "sha256": "73844e769ee1e20ad9029d826213a55016c3ec0757fe9a079d811fa0abfe12e5",
+      "exports": [
+        {
+          "section": "PyTorch FP32 Results",
+          "file": "resnet18_pytorch_fp32_results.csv",
+          "rows": 4
+        },
+        {
+          "section": "PyTorch FP16 Results",
+          "file": "resnet18_pytorch_fp16_results.csv",
+          "rows": 4
+        },
+        {
+          "section": "ONNX Runtime FP32 Results",
+          "file": "resnet18_onnx_runtime_fp32_results.csv",
+          "rows": 4
+        },
+        {
+          "section": "TensorRT EP FP32 Results",
+          "file": "resnet18_tensorrt_ep_fp32_results.csv",
+          "rows": 4
+        },
+        {
+          "section": "TensorRT EP FP16 Results",
+          "file": "resnet18_tensorrt_ep_fp16_results.csv",
+          "rows": 4
+        }
+      ]
+    },
+    {
+      "path": "reports/yolov8n_inference_benchmark.md",
+      "sha256": "081118a5b86915f085bd0c6a7c49eb94782e9b22e1fb97a9ffdc96f440520dbd",
+      "exports": [
+        {
+          "section": "ONNX Runtime CUDA FP32 Results",
+          "file": "yolov8n_onnx_runtime_cuda_fp32_results.csv",
+          "rows": 4
+        },
+        {
+          "section": "TensorRT EP FP16 Results",
+          "file": "yolov8n_tensorrt_ep_fp16_results.csv",
+          "rows": 4
+        }
+      ]
+    },
+    {
+      "path": "cuda_finance/monte_carlo_option_pricing/reports/monte_carlo_benchmark.md",
+      "sha256": "c14f512428a11d15effbdc06667bba3e580431d41870e2fcd8bcfbf09032fc2d",
+      "exports": [
+        {
+          "section": "CPU and CUDA Results",
+          "file": "monte_carlo_cpu_and_cuda_results.csv",
+          "rows": 8
+        }
+      ]
+    }
+  ]
+}

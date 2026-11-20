@@ -1,0 +1,5 @@
+Batch,Mean ms,P50 ms,P90 ms,P95 ms,P99 ms,Min ms,Max ms,Throughput samples/s,Provider
+1,0.877,0.860,0.949,0.975,1.053,0.808,1.468,1140.229,TensorrtExecutionProvider
+4,1.667,1.504,2.172,2.215,2.320,1.435,2.327,2399.911,TensorrtExecutionProvider
+8,2.617,2.588,2.750,2.794,2.978,2.486,3.409,3056.456,TensorrtExecutionProvider
+16,4.797,4.768,4.899,4.958,5.109,4.670,5.233,3335.212,TensorrtExecutionProvider

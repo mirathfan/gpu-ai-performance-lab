@@ -1,0 +1,5 @@
+Batch,Image size,Mean ms,P50 ms,P90 ms,P95 ms,P99 ms,Min ms,Max ms,Throughput images/s,Provider
+1,640,8.068,8.504,9.376,9.574,10.975,6.401,11.111,123.940,CUDAExecutionProvider
+2,640,11.194,11.016,11.466,11.668,23.860,10.046,26.034,178.671,CUDAExecutionProvider
+4,640,18.431,18.105,18.370,18.703,27.562,17.790,27.784,217.031,CUDAExecutionProvider
+8,640,34.194,34.132,34.716,34.969,35.503,33.383,36.141,233.962,CUDAExecutionProvider
